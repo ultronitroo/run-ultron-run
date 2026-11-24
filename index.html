@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Run Ultron Run — 3D Cyber Endless Runner</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Orbitron:wght@600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #060810;
+      font-family: 'Inter', sans-serif;
+      color: #f8fafc;
+    }
+    .font-display { font-family: 'Orbitron', 'Inter', sans-serif; }
+    #game-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .glass-panel {
+      background: rgba(10, 14, 26, 0.78);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .neon-red-glow {
+      box-shadow: 0 0 24px rgba(239, 68, 68, 0.45), inset 0 0 12px rgba(239, 68, 68, 0.2);
+    }
+    .neon-cyan-glow {
+      box-shadow: 0 0 20px rgba(34, 211, 238, 0.4);
+    }
+    @keyframes pulseGlow {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.55); }
+      50% { transform: scale(1.03); box-shadow: 0 0 34px rgba(239, 68, 68, 0.85); }
+    }
+    .btn-play-pulse {
+      animation: pulseGlow 2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Top HUD (visible during gameplay & pause) -->
+    <div id="hud" class="hidden pointer-events-none absolute inset-x-0 top-0 p-3 sm:p-5 flex items-start justify-between z-20">
+      <!-- Left: Score & Multiplier -->
+      <div class="flex flex-col gap-1.5">
+        <div class="glass-panel rounded-xl px-3.5 py-2 flex items-baseline gap-3">
+          <div>
+            <div class="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Score</div>
+            <div id="hud-score" class="font-display text-xl sm:text-2xl font-extrabold text-white leading-none">000000</div>
+          </div>
+        </div>
+        <div class="glass-panel rounded-lg px-3 py-1 flex items-center gap-2 text-xs text-slate-300 w-fit">
+          <span class="text-slate-400">BEST:</span>
+          <span id="hud-best" class="font-display font-bold text-amber-300">0</span>
+        </div>
+      </div>
+
+      <!-- Center/Right: Coin Counter & Controls -->
+      <div class="flex items-center gap-2 pointer-events-auto">
+        <div class="glass-panel rounded-xl px-4 py-2 flex items-center gap-2.5 border border-amber-400/50 shadow-[0_0_16px_rgba(250,204,21,0.22)]">
+          <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-yellow-300 to-amber-500 text-slate-950 text-xs font-black shadow-[0_0_10px_rgba(250,204,21,0.7)]">$</span>
+          <div class="leading-tight">
+            <div class="text-[9px] uppercase tracking-widest text-amber-200/90 font-bold">Coins</div>
+            <div class="flex items-baseline gap-1.5">
+              <span id="hud-coins" class="font-display text-lg sm:text-xl font-black text-amber-300">0</span>
+              <span id="hud-total-coins" class="text-[10px] font-semibold text-slate-400">/ 0</span>
+            </div>
+          </div>
+        </div>
+        <button id="btn-mute-hud" title="Toggle Sound" class="glass-panel hover:bg-white/10 active:scale-95 transition rounded-xl p-2.5 text-slate-200 cursor-pointer">
+          <span id="mute-icon-hud" class="text-base leading-none">🔊</span>
+        </button>
+        <button id="btn-pause" title="Pause (P)" class="glass-panel hover:bg-white/10 active:scale-95 transition rounded-xl px-3 py-2.5 text-slate-200 font-bold text-sm cursor-pointer">
+          ⏸
+        </button>
+      </div>
+    </div>
+
+
+
+    <!-- Mobile / Touch On-Screen Controls (toggleable or always handy on small screens) -->
+    <div id="touch-controls" class="hidden sm:hidden absolute inset-x-0 bottom-3 px-4 flex items-center justify-between z-20 pointer-events-none">
+      <div class="flex gap-2 pointer-events-auto">
+        <button id="btn-touch-left" class="glass-panel active:bg-white/20 rounded-2xl w-14 h-14 flex items-center justify-center text-xl font-bold">◀</button>
+        <button id="btn-touch-right" class="glass-panel active:bg-white/20 rounded-2xl w-14 h-14 flex items-center justify-center text-xl font-bold">▶</button>
+      </div>
+      <div class="flex gap-2 pointer-events-auto">
+        <button id="btn-touch-slide" class="glass-panel active:bg-white/20 rounded-2xl w-14 h-14 flex items-center justify-center text-sm font-bold">SLIDE</button>
+        <button id="btn-touch-jump" class="glass-panel bg-red-500/30 border-red-400/50 active:bg-red-500/50 rounded-2xl w-14 h-14 flex items-center justify-center text-sm font-bold">JUMP</button>
+      </div>
+    </div>
+
+    <!-- Danger / Pursuer Warning Banner -->
+    <div id="pursuer-warning" class="hidden pointer-events-none absolute top-20 inset-x-0 flex justify-center z-20">
+      <div class="px-4 py-1 rounded-full bg-red-600/80 border border-red-300/60 text-white text-xs font-display font-bold tracking-widest uppercase animate-pulse">
+        ⚠ Interceptor Closing In — Don't Stumble!
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="hidden pointer-events-none absolute top-20 left-1/2 -translate-x-1/2 z-40 glass-panel border-cyan-400/50 rounded-full px-4 py-1.5 text-xs sm:text-sm font-semibold text-cyan-200 shadow-lg"></div>
+
+    <!-- TITLE / MAIN MENU OVERLAY -->
+    <div id="screen-menu" class="absolute inset-0 z-30 flex items-center justify-center p-4 bg-gradient-to-b from-slate-950/60 via-slate-950/45 to-slate-950/85">
+      <div class="glass-panel rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-2xl border border-white/15">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/15 border border-red-500/40 text-red-300 text-[11px] font-display font-bold tracking-widest uppercase mb-3">
+          Cyber-Metro Sector 09
+        </div>
+        <h1 class="font-display text-3xl sm:text-4xl font-black tracking-tight text-white drop-shadow-[0_0_20px_rgba(239,68,68,0.65)]">
+          RUN <span class="text-red-500">ULTRON</span> RUN
+        </h1>
+        <p class="text-slate-300 text-xs sm:text-sm mt-2 mb-5">
+          Dodge maglev trains, leap laser barriers, and outrun the Interceptor across endless neon rails.
+        </p>
+
+        <!-- Stats Strip -->
+        <div class="grid grid-cols-2 gap-3 mb-6">
+          <div class="bg-slate-900/70 border border-white/10 rounded-2xl p-3">
+            <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">High Score</div>
+            <div id="menu-best" class="font-display text-xl font-extrabold text-amber-300 mt-0.5">0</div>
+          </div>
+          <div class="bg-slate-900/70 border border-white/10 rounded-2xl p-3">
+            <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Coins</div>
+            <div class="font-display text-xl font-extrabold text-amber-300 mt-0.5 flex items-center justify-center gap-1.5">
+              <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gradient-to-br from-yellow-300 to-amber-500 text-slate-950 text-[10px] font-black">$</span>
+              <span id="menu-coins">0</span>
+            </div>
+          </div>
+        </div>
+
+        <button id="btn-play" class="btn-play-pulse w-full py-4 rounded-2xl bg-gradient-to-r from-red-600 to-rose-500 hover:from-red-500 hover:to-rose-400 text-white font-display font-extrabold text-lg tracking-wider uppercase transition cursor-pointer mb-3">
+          Tap to Run
+        </button>
+
+        <div class="grid grid-cols-3 gap-2">
+          <button id="btn-open-armory" class="glass-panel hover:bg-white/10 rounded-xl py-2.5 text-xs font-semibold text-slate-200 transition cursor-pointer">
+            ⚙ Armory
+          </button>
+          <button id="btn-open-howto" class="glass-panel hover:bg-white/10 rounded-xl py-2.5 text-xs font-semibold text-slate-200 transition cursor-pointer">
+            ❓ Controls
+          </button>
+          <button id="btn-mute-menu" class="glass-panel hover:bg-white/10 rounded-xl py-2.5 text-xs font-semibold text-slate-200 transition cursor-pointer">
+            <span id="mute-label-menu">🔊 Sound</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAUSE OVERLAY -->
+    <div id="screen-pause" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+      <div class="glass-panel rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl">
+        <h2 class="font-display text-2xl font-extrabold text-white mb-1">SYSTEM PAUSED</h2>
+        <p class="text-xs text-slate-400 mb-5">Metro Sector 09</p>
+        <div class="flex flex-col gap-2.5">
+          <button id="btn-resume" class="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-display font-bold tracking-wider uppercase cursor-pointer">Resume</button>
+          <button id="btn-restart-pause" class="w-full py-3 rounded-xl glass-panel hover:bg-white/10 text-slate-200 font-semibold text-sm cursor-pointer">Restart Run</button>
+          <button id="btn-menu-pause" class="w-full py-3 rounded-xl glass-panel hover:bg-white/10 text-slate-300 font-semibold text-sm cursor-pointer">Back to Menu</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAME OVER OVERLAY -->
+    <div id="screen-gameover" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
+      <div class="glass-panel rounded-3xl max-w-md w-full p-6 sm:p-7 text-center shadow-2xl border border-red-500/30">
+        <div id="go-new-best" class="hidden inline-block px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/60 text-amber-300 text-xs font-display font-bold uppercase mb-2">
+          ★ New High Score!
+        </div>
+        <h2 class="font-display text-2xl sm:text-3xl font-black text-red-400 tracking-wide">SYSTEM OFFLINE</h2>
+        <p id="go-reason" class="text-xs text-slate-400 mt-1 mb-5">Collided with Maglev Transit</p>
+
+        <div class="grid grid-cols-3 gap-2.5 mb-6">
+          <div class="bg-slate-900/75 border border-white/10 rounded-2xl p-3">
+            <div class="text-[10px] uppercase text-slate-400 font-semibold">Score</div>
+            <div id="go-score" class="font-display text-lg font-extrabold text-white mt-0.5">0</div>
+          </div>
+          <div class="bg-slate-900/75 border border-white/10 rounded-2xl p-3">
+            <div class="text-[10px] uppercase text-slate-400 font-semibold">Coins</div>
+            <div id="go-coins" class="font-display text-lg font-extrabold text-amber-300 mt-0.5">+0</div>
+          </div>
+          <div class="bg-slate-900/75 border border-white/10 rounded-2xl p-3">
+            <div class="text-[10px] uppercase text-slate-400 font-semibold">Distance</div>
+            <div id="go-dist" class="font-display text-lg font-extrabold text-slate-200 mt-0.5">0m</div>
+          </div>
+        </div>
+
+        <button id="btn-retry" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-500 hover:from-red-500 hover:to-rose-400 text-white font-display font-extrabold tracking-wider uppercase cursor-pointer mb-2.5">
+          Run Again
+        </button>
+        <div class="grid grid-cols-2 gap-2.5">
+          <button id="btn-go-armory" class="glass-panel hover:bg-white/10 rounded-xl py-2.5 text-xs font-semibold text-slate-200 cursor-pointer">
+            ⚙ Armory
+          </button>
+          <button id="btn-go-menu" class="glass-panel hover:bg-white/10 rounded-xl py-2.5 text-xs font-semibold text-slate-200 cursor-pointer">
+            Main Menu
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARMORY / UPGRADES MODAL -->
+    <div id="screen-armory" class="hidden absolute inset-0 z-40 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div class="glass-panel rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="font-display text-xl font-extrabold text-white">ULTRON ARMORY</h2>
+            <p class="text-xs text-slate-400">Unlock chassis skins with your coins</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="glass-panel rounded-xl px-3 py-1.5 flex items-center gap-1.5">
+              <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gradient-to-br from-yellow-300 to-amber-500 text-slate-950 text-[10px] font-black">$</span>
+              <span id="armory-coins" class="font-display text-sm font-bold text-amber-300">0</span>
+            </div>
+            <button id="btn-close-armory" class="glass-panel hover:bg-white/15 rounded-xl px-3 py-1.5 text-sm font-bold cursor-pointer">✕</button>
+          </div>
+        </div>
+
+        <div class="text-xs uppercase tracking-wider text-slate-400 font-bold mb-2">Chassis Skins</div>
+        <div id="armory-skins" class="grid grid-cols-2 gap-2.5"></div>
+      </div>
+    </div>
+
+    <!-- HOW TO PLAY MODAL -->
+    <div id="screen-howto" class="hidden absolute inset-0 z-40 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div class="glass-panel rounded-3xl max-w-md w-full p-6 shadow-2xl">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-display text-xl font-extrabold text-white">FLIGHT MANUAL</h2>
+          <button id="btn-close-howto" class="glass-panel hover:bg-white/15 rounded-xl px-3 py-1.5 text-sm font-bold cursor-pointer">✕</button>
+        </div>
+        <div class="space-y-3 text-xs sm:text-sm text-slate-200">
+          <div class="flex items-center justify-between bg-slate-900/70 rounded-xl p-3">
+            <span>Switch Lanes</span>
+            <span class="font-display font-bold text-cyan-300">← / → or A / D or Swipe</span>
+          </div>
+          <div class="flex items-center justify-between bg-slate-900/70 rounded-xl p-3">
+            <span>Jump Over Lasers</span>
+            <span class="font-display font-bold text-cyan-300">↑ / W or Swipe Up</span>
+          </div>
+          <div class="flex items-center justify-between bg-slate-900/70 rounded-xl p-3">
+            <span>Slide / Fast-Fall</span>
+            <span class="font-display font-bold text-cyan-300">↓ / S or Swipe Down</span>
+          </div>
+          <p class="text-xs text-slate-400 pt-1">
+            Hit neon ramps to run atop Maglev trains and collect gold coins to unlock new Ultron chassis skins!
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // PERSISTENT SAVE DATA (safe localStorage wrapper)
+    // =========================================================================
+    const STORAGE_KEY = 'run_ultron_run_save_v1';
+    const DEFAULT_SAVE = {
+      highScore: 0,
+      coins: 50,
+      unlockedSkins: ['crimson'],
+      activeSkin: 'crimson'
+    };
+
+    function loadSave() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return JSON.parse(JSON.stringify(DEFAULT_SAVE));
+        const parsed = JSON.parse(raw);
+        const savedCoins = Number.isFinite(parsed.coins) ? parsed.coins : (Number.isFinite(parsed.cores) ? parsed.cores : 50);
+        return {
+          highScore: Number(parsed.highScore) || 0,
+          coins: savedCoins,
+          unlockedSkins: Array.isArray(parsed.unlockedSkins) ? parsed.unlockedSkins : ['crimson'],
+          activeSkin: parsed.activeSkin || 'crimson'
+        };
+      } catch (e) {
+        return JSON.parse(JSON.stringify(DEFAULT_SAVE));
+      }
+    }
+
+    function writeSave(data) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch (e) {
+        // Ignore storage restrictions
+      }
+    }
+
+    let saveData = loadSave();
+
+    const SKINS = [
+      { id: 'crimson', name: 'Ultron Prime', price: 0, body: 0x3b4252, armor: 0x64748b, glow: 0xff2a3c },
+      { id: 'gold', name: 'Solaris Gold', price: 120, body: 0x453211, armor: 0xeab308, glow: 0x38bdf8 },
+      { id: 'void', name: 'Stealth Void', price: 220, body: 0x0f172a, armor: 0x1e293b, glow: 0xa855f7 },
+      { id: 'cyber', name: 'Cyber Neon', price: 350, body: 0x0f293a, armor: 0x06b6d4, glow: 0x22c55e }
+    ];
+
+    // =========================================================================
+    // SYNTHESIZED WEB AUDIO ENGINE (Zero external audio files)
+    // =========================================================================
+    const SoundFX = (() => {
+      let ctx = null;
+      let muted = false;
+      let coinStreak = 0;
+      let lastCoinTime = 0;
+
+      function ensureCtx() {
+        if (muted) return null;
+        if (!ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) ctx = new AudioCtx();
+        }
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().catch(() => {});
+        }
+        return ctx;
+      }
+
+      function playTone(freqStart, freqEnd, duration, type = 'sine', gainPeak = 0.14) {
+        const c = ensureCtx();
+        if (!c) return;
+        const now = c.currentTime;
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freqStart, now);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), now + duration);
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(gainPeak, now + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        osc.connect(gain);
+        gain.connect(c.destination);
+        osc.start(now);
+        osc.stop(now + duration + 0.02);
+      }
+
+      return {
+        init() { ensureCtx(); },
+        isMuted() { return muted; },
+        toggleMute() {
+          muted = !muted;
+          return muted;
+        },
+        lane() { playTone(240, 420, 0.08, 'triangle', 0.1); },
+        jump() { playTone(220, 620, 0.16, 'sawtooth', 0.09); },
+        slide() { playTone(380, 120, 0.14, 'triangle', 0.1); },
+        coin() {
+          const now = performance.now();
+          coinStreak = (now - lastCoinTime < 450) ? Math.min(coinStreak + 1, 10) : 0;
+          lastCoinTime = now;
+          const base = 660 + coinStreak * 45;
+          playTone(base, base * 1.45, 0.09, 'sine', 0.11);
+        },
+        powerup() {
+          playTone(440, 880, 0.14, 'triangle', 0.13);
+          setTimeout(() => playTone(660, 1320, 0.18, 'sine', 0.12), 70);
+        },
+        shieldOn() {
+          playTone(300, 900, 0.22, 'sawtooth', 0.11);
+        },
+        shieldBreak() {
+          playTone(520, 90, 0.32, 'sawtooth', 0.18);
+        },
+        stumble() {
+          playTone(180, 70, 0.22, 'square', 0.14);
+        },
+        crash() {
+          playTone(150, 38, 0.45, 'sawtooth', 0.22);
+          setTimeout(() => playTone(95, 28, 0.35, 'square', 0.15), 60);
+        }
+      };
+    })();
+
+    // =========================================================================
+    // THREE.JS SCENE & GAME STATE
+    // =========================================================================
+    const LANE_WIDTH = 3.2;
+    const LANES = [-LANE_WIDTH, 0, LANE_WIDTH];
+    const BASE_SPEED = 24;
+    const MAX_SPEED = 54;
+    const GRAVITY = -46;
+    const JUMP_VELOCITY = 17.2;
+
+    let scene, camera, renderer;
+    let ultronGroup, ultronParts = {};
+    let pursuerGroup;
+    let trackSegments = [];
+    let ultronWallSigns = [];
+    let obstacles = [];
+    let collectibles = [];
+    let particles = [];
+
+    let animFrameId = null;
+    let lastTime = 0;
+
+    const state = {
+      mode: 'menu', // 'menu' | 'playing' | 'paused' | 'gameover'
+      speed: BASE_SPEED,
+      distance: 0,
+      score: 0,
+      runCoins: 0,
+      lane: 1, // 0, 1, 2
+      targetX: 0,
+      playerX: 0,
+      playerY: 0,
+      velY: 0,
+      isJumping: false,
+      isSliding: false,
+      queuedSlide: false,
+      slideTimer: 0,
+      groundY: 0,
+      runCycle: 0,
+      pursuerDist: 10, // closer when stumbled
+      stumbleTimer: 0,
+      invulnTimer: 0,
+      spawnTimer: 0,
+      nextSegmentZ: 0,
+      screenShake: 0,
+      returnFromArmory: 'menu'
+    };
+
+    // Shared geometries & materials for performance
+    const sharedGeo = {};
+    const sharedMat = {};
+
+    function initSharedAssets() {
+      sharedGeo.coin = new THREE.CylinderGeometry(0.44, 0.44, 0.11, 20);
+      sharedGeo.coin.rotateX(Math.PI / 2);
+      sharedGeo.particle = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+
+      sharedMat.coin = new THREE.MeshStandardMaterial({
+        color: 0xfacc15,
+        emissive: 0xca8a04,
+        emissiveIntensity: 0.75,
+        metalness: 0.85,
+        roughness: 0.2
+      });
+      sharedMat.trainBody = new THREE.MeshStandardMaterial({
+        color: 0x1e293b, metalness: 0.75, roughness: 0.3
+      });
+      sharedMat.trainStripe = new THREE.MeshStandardMaterial({
+        color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.8
+      });
+      sharedMat.trainHeadlight = new THREE.MeshStandardMaterial({
+        color: 0xffffff, emissive: 0xfef08a, emissiveIntensity: 1.2
+      });
+      sharedMat.laser = new THREE.MeshStandardMaterial({
+        color: 0xff2a3c, emissive: 0xef4444, emissiveIntensity: 1.2
+      });
+      sharedMat.pillar = new THREE.MeshStandardMaterial({
+        color: 0x334155, metalness: 0.6, roughness: 0.4
+      });
+      sharedMat.ramp = new THREE.MeshStandardMaterial({
+        color: 0x0f172a, emissive: 0x06b6d4, emissiveIntensity: 0.35, metalness: 0.5, roughness: 0.4
+      });
+    }
+
+    function getSkin() {
+      return SKINS.find(s => s.id === saveData.activeSkin) || SKINS[0];
+    }
+
+    function buildUltron() {
+      if (ultronGroup) scene.remove(ultronGroup);
+      const skin = getSkin();
+
+      ultronGroup = new THREE.Group();
+
+      const bodyMat = new THREE.MeshStandardMaterial({ color: skin.body, metalness: 0.82, roughness: 0.28 });
+      const armorMat = new THREE.MeshStandardMaterial({ color: skin.armor, metalness: 0.88, roughness: 0.22 });
+      const glowMat = new THREE.MeshStandardMaterial({ color: skin.glow, emissive: skin.glow, emissiveIntensity: 1.4 });
+
+      // Torso
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.88, 0.46), armorMat);
+      torso.position.y = 1.35;
+      torso.castShadow = true;
+      ultronGroup.add(torso);
+
+      // Core Reactor
+      const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), glowMat);
+      core.position.set(0, 1.38, -0.22);
+      ultronGroup.add(core);
+
+      // Head
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.48, 0.46), armorMat);
+      head.position.y = 2.08;
+      head.castShadow = true;
+      ultronGroup.add(head);
+
+      // Visor Eyes (facing -Z forward, and also visible on back slightly for camera)
+      const visorBack = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.06), glowMat);
+      visorBack.position.set(0, 2.1, 0.22);
+      ultronGroup.add(visorBack);
+
+      const visorFront = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.1, 0.06), glowMat);
+      visorFront.position.set(0, 2.1, -0.22);
+      ultronGroup.add(visorFront);
+
+      // Shoulder pads
+      const shL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.24, 0.48), armorMat);
+      shL.position.set(-0.52, 1.68, 0);
+      ultronGroup.add(shL);
+      const shR = shL.clone();
+      shR.position.x = 0.52;
+      ultronGroup.add(shR);
+
+      // Arms (pivots at shoulders)
+      const armLPivot = new THREE.Group();
+      armLPivot.position.set(-0.52, 1.56, 0);
+      const armL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.72, 0.24), bodyMat);
+      armL.position.y = -0.34;
+      armLPivot.add(armL);
+      ultronGroup.add(armLPivot);
+
+      const armRPivot = new THREE.Group();
+      armRPivot.position.set(0.52, 1.56, 0);
+      const armR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.72, 0.24), bodyMat);
+      armR.position.y = -0.34;
+      armRPivot.add(armR);
+      ultronGroup.add(armRPivot);
+
+      // Legs (pivots at hips)
+      const legLPivot = new THREE.Group();
+      legLPivot.position.set(-0.22, 0.9, 0);
+      const legL = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.88, 0.28), bodyMat);
+      legL.position.y = -0.44;
+      legLPivot.add(legL);
+      ultronGroup.add(legLPivot);
+
+      const legRPivot = new THREE.Group();
+      legRPivot.position.set(0.22, 0.9, 0);
+      const legR = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.88, 0.28), bodyMat);
+      legR.position.y = -0.44;
+      legRPivot.add(legR);
+      ultronGroup.add(legRPivot);
+
+
+
+      ultronParts = { torso, head, armLPivot, armRPivot, legLPivot, legRPivot };
+      scene.add(ultronGroup);
+    }
+
+    function buildPursuer() {
+      if (pursuerGroup) scene.remove(pursuerGroup);
+      pursuerGroup = new THREE.Group();
+      const hullMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8, roughness: 0.3 });
+      const sirenMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x38bdf8, emissiveIntensity: 1.5 });
+      const redSiren = new THREE.MeshStandardMaterial({ color: 0xff2a3c, emissive: 0xff2a3c, emissiveIntensity: 1.5 });
+
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.1, 1.4), hullMat);
+      body.position.y = 1.6;
+      pursuerGroup.add(body);
+
+      const lightL = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.2, 0.2), sirenMat);
+      lightL.position.set(-0.45, 2.25, 0);
+      pursuerGroup.add(lightL);
+
+      const lightR = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.2, 0.2), redSiren);
+      lightR.position.set(0.45, 2.25, 0);
+      pursuerGroup.add(lightR);
+
+      pursuerGroup.position.set(0, 0, 8);
+      scene.add(pursuerGroup);
+    }
+
+    function createTrackSegment(zPos) {
+      const seg = new THREE.Group();
+      seg.position.z = zPos;
+
+      // Ground bed
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(13.5, 24),
+        new THREE.MeshStandardMaterial({ color: 0x0b1020, roughness: 0.9, metalness: 0.2 })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      seg.add(ground);
+
+      // 3 Maglev Rails
+      const railMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.3 });
+      const glowRailMat = new THREE.MeshStandardMaterial({ color: 0x06b6d4, emissive: 0x0891b2, emissiveIntensity: 0.65 });
+
+      for (const lx of LANES) {
+        const railL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 24), railMat);
+        railL.position.set(lx - 0.75, 0.04, 0);
+        seg.add(railL);
+        const railR = railL.clone();
+        railR.position.x = lx + 0.75;
+        seg.add(railR);
+
+        const centerGlow = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 24), glowRailMat);
+        centerGlow.position.set(lx, 0.02, 0);
+        seg.add(centerGlow);
+      }
+
+      // Cross sleepers
+      const sleeperMat = new THREE.MeshStandardMaterial({ color: 0x172033, roughness: 0.8 });
+      for (let z = -10; z <= 10; z += 4) {
+        const sl = new THREE.Mesh(new THREE.BoxGeometry(10.8, 0.04, 0.35), sleeperMat);
+        sl.position.set(0, 0.02, z);
+        seg.add(sl);
+      }
+
+      // Side Cyber Walls / Pillars
+      const wallMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.5, roughness: 0.5 });
+      const wallL = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 24), wallMat);
+      wallL.position.set(-6.8, 0.7, 0);
+      seg.add(wallL);
+      const wallR = wallL.clone();
+      wallR.position.x = 6.8;
+      seg.add(wallR);
+
+      // Overhead Neon Arch
+      const archMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.7, roughness: 0.3 });
+      const postL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 7.5, 0.5), archMat);
+      postL.position.set(-6.5, 3.75, 0);
+      seg.add(postL);
+      const postR = postL.clone();
+      postR.position.x = 6.5;
+      seg.add(postR);
+
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(13.5, 0.45, 0.5), archMat);
+      beam.position.set(0, 7.5, 0);
+      seg.add(beam);
+
+      const neonStrip = new THREE.Mesh(
+        new THREE.BoxGeometry(11.5, 0.12, 0.14),
+        new THREE.MeshBasicMaterial({ color: 0xef4444 })
+      );
+      neonStrip.position.set(0, 7.25, 0.25);
+      seg.add(neonStrip);
+
+      // Background City Towers
+      const bldgMat = new THREE.MeshStandardMaterial({ color: 0x090d18, roughness: 0.9 });
+      const winMat = new THREE.MeshBasicMaterial({ color: 0x1d4ed8 });
+      for (const side of [-1, 1]) {
+        const h = 10 + Math.random() * 16;
+        const b = new THREE.Mesh(new THREE.BoxGeometry(5.5, h, 8), bldgMat);
+        b.position.set(side * (11.5 + Math.random() * 2), h / 2 - 1, (Math.random() - 0.5) * 6);
+        seg.add(b);
+
+        const win = new THREE.Mesh(new THREE.BoxGeometry(0.2, h * 0.6, 1.2), winMat);
+        win.position.set(b.position.x - side * 2.7, h * 0.45, b.position.z);
+        seg.add(win);
+      }
+
+      scene.add(seg);
+      trackSegments.push(seg);
+    }
+
+    function createUltronWallTexture() {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 192;
+      const g = c.getContext('2d');
+
+      // Dark metallic panel background
+      g.fillStyle = '#090d1a';
+      g.fillRect(0, 0, c.width, c.height);
+
+      // Glowing red border
+      g.strokeStyle = '#ef4444';
+      g.lineWidth = 8;
+      g.strokeRect(8, 8, c.width - 16, c.height - 16);
+
+      // Subtle inner accent lines
+      g.fillStyle = 'rgba(239, 68, 68, 0.16)';
+      g.fillRect(16, 16, c.width - 32, 16);
+      g.fillRect(16, c.height - 32, c.width - 32, 16);
+
+      // "ULTRON" text with neon glow
+      g.font = '900 94px Orbitron, Inter, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.shadowColor = '#ff2a3c';
+      g.shadowBlur = 22;
+      g.fillStyle = '#ffffff';
+      g.fillText('ULTRON', c.width / 2, c.height / 2 + 4);
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.needsUpdate = true;
+      return tex;
+    }
+
+    function initWallSigns() {
+      const tex = createUltronWallTexture();
+      const signMat = new THREE.MeshBasicMaterial({ map: tex });
+      const signGeo = new THREE.PlaneGeometry(8.5, 2.8);
+
+      // 4 pairs spaced exactly 50m apart (-25, -75, -125, -175) -> wraps by 200m
+      for (let i = 0; i < 4; i++) {
+        const zPos = -25 - i * 50;
+        const group = new THREE.Group();
+        group.position.z = zPos;
+
+        const leftSign = new THREE.Mesh(signGeo, signMat);
+        leftSign.position.set(-6.12, 2.15, 0);
+        leftSign.rotation.y = Math.PI / 2;
+        group.add(leftSign);
+
+        const rightSign = new THREE.Mesh(signGeo, signMat);
+        rightSign.position.set(6.12, 2.15, 0);
+        rightSign.rotation.y = -Math.PI / 2;
+        group.add(rightSign);
+
+        scene.add(group);
+        ultronWallSigns.push(group);
+      }
+    }
+
+    // =========================================================================
+    // OBSTACLES & COLLECTIBLES SPAWNING
+    // =========================================================================
+    function spawnObstacle(type, laneIdx, zPos, opts = {}) {
+      const group = new THREE.Group();
+      const x = LANES[laneIdx];
+      group.position.set(x, 0, zPos);
+
+      let obs = {
+        mesh: group,
+        type, // 'train' | 'ramp_train' | 'low_laser' | 'high_laser' | 'pillar'
+        lane: laneIdx,
+        z: zPos,
+        length: 4,
+        speed: opts.moving ? 14 : 0,
+        hit: false
+      };
+
+      if (type === 'train' || type === 'ramp_train') {
+        const trainLen = type === 'ramp_train' ? 14 : 13;
+        obs.length = trainLen;
+        const body = new THREE.Mesh(new THREE.BoxGeometry(2.35, 3.1, trainLen), sharedMat.trainBody);
+        body.position.y = 1.55;
+        group.add(body);
+
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, trainLen * 0.96), sharedMat.trainStripe);
+        stripe.position.y = 2.2;
+        group.add(stripe);
+
+        const headL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.1), sharedMat.trainHeadlight);
+        headL.position.set(-0.65, 1.0, trainLen / 2 + 0.02);
+        group.add(headL);
+        const headR = headL.clone();
+        headR.position.x = 0.65;
+        group.add(headR);
+
+        if (type === 'ramp_train') {
+          // Add sloped ramp at the front (+Z side, facing player)
+          const rampLen = 5.0;
+          const rampMesh = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.2, rampLen), sharedMat.ramp);
+          rampMesh.position.set(0, 1.55, trainLen / 2 + rampLen * 0.43);
+          rampMesh.rotation.x = Math.atan2(3.1, rampLen);
+          group.add(rampMesh);
+          obs.hasRamp = true;
+          obs.rampLength = rampLen;
+        }
+      } else if (type === 'low_laser') {
+        obs.length = 1.0;
+        const pL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 1.15, 0.24), sharedMat.pillar);
+        pL.position.set(-1.1, 0.58, 0);
+        group.add(pL);
+        const pR = pL.clone();
+        pR.position.x = 1.1;
+        group.add(pR);
+        const beam = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.35, 0.2), sharedMat.laser);
+        beam.position.set(0, 0.85, 0);
+        group.add(beam);
+      } else if (type === 'high_laser') {
+        obs.length = 1.0;
+        const pL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 3.2, 0.24), sharedMat.pillar);
+        pL.position.set(-1.1, 1.6, 0);
+        group.add(pL);
+        const pR = pL.clone();
+        pR.position.x = 1.1;
+        group.add(pR);
+        const beam = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.25, 0.25), sharedMat.laser);
+        beam.position.set(0, 2.25, 0);
+        group.add(beam);
+      } else if (type === 'pillar') {
+        obs.length = 1.6;
+        const block = new THREE.Mesh(new THREE.BoxGeometry(2.1, 3.0, 1.5), sharedMat.pillar);
+        block.position.y = 1.5;
+        group.add(block);
+        const warn = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.25, 1.55), sharedMat.laser);
+        warn.position.y = 2.6;
+        group.add(warn);
+      }
+
+      scene.add(group);
+      obstacles.push(obs);
+    }
+
+    function spawnCoinLine(laneIdx, startZ, count, yHeight = 0.85, spacing = 2.6, arcHeight = 0) {
+      for (let i = 0; i < count; i++) {
+        const mesh = new THREE.Mesh(sharedGeo.coin, sharedMat.coin);
+        let y = yHeight;
+        if (arcHeight > 0) {
+          const t = count > 1 ? i / (count - 1) : 0.5;
+          y += Math.sin(t * Math.PI) * arcHeight;
+        }
+        mesh.position.set(LANES[laneIdx], y, startZ - i * spacing);
+        scene.add(mesh);
+        collectibles.push({ mesh, kind: 'coin', lane: laneIdx, collected: false });
+      }
+    }
+
+
+
+    function spawnPattern(zStart) {
+      const pattern = Math.floor(Math.random() * 6);
+      const laneA = Math.floor(Math.random() * 3);
+      const laneB = (laneA + 1) % 3;
+      const laneC = (laneA + 2) % 3;
+
+      if (pattern === 0) {
+        // Two trains blocking two lanes, open lane has coins
+        spawnObstacle('train', laneA, zStart, { moving: Math.random() < 0.35 });
+        spawnObstacle('train', laneB, zStart - 2);
+        spawnCoinLine(laneC, zStart + 4, 5, 0.85);
+      } else if (pattern === 1) {
+        // Ramp train + coins on roof!
+        spawnObstacle('ramp_train', laneA, zStart);
+        spawnCoinLine(laneA, zStart + 1, 5, 3.9, 2.2);
+        spawnObstacle('low_laser', laneB, zStart - 3);
+        spawnCoinLine(laneC, zStart, 4, 0.85);
+      } else if (pattern === 2) {
+        // Jump & Slide combo
+        spawnObstacle('low_laser', laneA, zStart);
+        spawnCoinLine(laneA, zStart + 2.5, 3, 0.9, 2.5, 1.7);
+        spawnObstacle('high_laser', laneB, zStart - 1);
+        spawnCoinLine(laneB, zStart + 1, 3, 0.65, 2.4);
+        spawnObstacle('pillar', laneC, zStart - 2);
+      } else if (pattern === 3) {
+        // Slalom pillars
+        spawnObstacle('pillar', laneA, zStart);
+        spawnObstacle('pillar', laneB, zStart - 10);
+        spawnCoinLine(laneC, zStart, 3, 0.85);
+        spawnCoinLine(laneA, zStart - 10, 3, 0.85);
+      } else if (pattern === 4) {
+        // Moving train + low laser
+        spawnObstacle('train', laneB, zStart - 4, { moving: true });
+        spawnObstacle('low_laser', laneA, zStart);
+        spawnCoinLine(laneC, zStart, 5, 0.85);
+      } else {
+        // Triple lane mix with powerup chance
+        spawnObstacle('high_laser', laneA, zStart);
+        spawnObstacle('low_laser', laneB, zStart);
+        spawnObstacle('low_laser', laneC, zStart);
+        spawnCoinLine(laneB, zStart + 2.5, 3, 0.9, 2.5, 1.6);
+      }
+
+
+    }
+
+    function spawnParticles(x, y, z, colorHex, count = 10) {
+      const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+      for (let i = 0; i < count; i++) {
+        const m = new THREE.Mesh(sharedGeo.particle, mat);
+        m.position.set(x, y, z);
+        scene.add(m);
+        particles.push({
+          mesh: m,
+          vx: (Math.random() - 0.5) * 8,
+          vy: Math.random() * 7 + 2,
+          vz: (Math.random() - 0.5) * 8,
+          life: 0.45 + Math.random() * 0.25
+        });
+      }
+    }
+
+    // =========================================================================
+    // INIT & RESIZE
+    // =========================================================================
+    function initThree() {
+      const container = document.getElementById('game-container');
+      const canvas = document.getElementById('game-canvas');
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x060914);
+      scene.fog = new THREE.FogExp2(0x060914, 0.015);
+
+      camera = new THREE.PerspectiveCamera(62, container.clientWidth / container.clientHeight, 0.1, 160);
+      camera.position.set(0, 4.6, 6.8);
+      camera.lookAt(0, 1.6, -8);
+
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(container.clientWidth, container.clientHeight);
+
+      // Lighting
+      const ambient = new THREE.AmbientLight(0x94a3b8, 0.75);
+      scene.add(ambient);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
+      dirLight.position.set(8, 18, 10);
+      scene.add(dirLight);
+
+      const redRim = new THREE.PointLight(0xff2a3c, 1.4, 24);
+      redRim.position.set(0, 3.5, 4);
+      scene.add(redRim);
+
+      initSharedAssets();
+      buildUltron();
+      buildPursuer();
+
+      // Build initial track segments
+      for (let i = 0; i < 7; i++) {
+        createTrackSegment(-i * 24 + 12);
+      }
+
+      // Build "ULTRON" wall signs every 50m
+      initWallSigns();
+
+      window.addEventListener('resize', onResize);
+    }
+
+    function onResize() {
+      const container = document.getElementById('game-container');
+      if (!container || !renderer || !camera) return;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+
+    // =========================================================================
+    // GAME FLOW & CONTROLS
+    // =========================================================================
+    function clearWorldObjects() {
+      for (const o of obstacles) scene.remove(o.mesh);
+      obstacles = [];
+      for (const c of collectibles) scene.remove(c.mesh);
+      collectibles = [];
+      for (const p of particles) scene.remove(p.mesh);
+      particles = [];
+    }
+
+    function startRun() {
+      SoundFX.init();
+      clearWorldObjects();
+      buildUltron();
+
+      state.mode = 'playing';
+      state.speed = BASE_SPEED;
+      state.distance = 0;
+      state.score = 0;
+      state.runCoins = 0;
+      state.lane = 1;
+      state.targetX = LANES[1];
+      state.playerX = LANES[1];
+      state.playerY = 0;
+      state.velY = 0;
+      state.isJumping = false;
+      state.isSliding = false;
+      state.queuedSlide = false;
+      state.slideTimer = 0;
+      state.groundY = 0;
+      state.pursuerDist = 6.5;
+      state.stumbleTimer = 0;
+      state.invulnTimer = 0;
+      state.spawnTimer = 0.4;
+      state.screenShake = 0;
+
+      ultronGroup.position.set(0, 0, 0);
+      ultronGroup.rotation.set(0, 0, 0);
+      ultronGroup.scale.set(1, 1, 1);
+      pursuerGroup.position.set(0, 0, state.pursuerDist);
+
+      // Pre-populate initial patterns down the track
+      for (let z = -42; z >= -110; z -= 34) {
+        spawnPattern(z);
+      }
+
+      showScreen(null);
+      document.getElementById('hud').classList.remove('hidden');
+      document.getElementById('touch-controls').classList.remove('hidden');
+      document.getElementById('pursuer-warning').classList.add('hidden');
+      updateHUD();
+    }
+
+    function pauseGame() {
+      if (state.mode !== 'playing') return;
+      state.mode = 'paused';
+      showScreen('screen-pause');
+    }
+
+    function resumeGame() {
+      if (state.mode !== 'paused') return;
+      state.mode = 'playing';
+      lastTime = performance.now();
+      showScreen(null);
+    }
+
+    function triggerGameOver(reason) {
+      state.mode = 'gameover';
+      SoundFX.crash();
+      state.screenShake = 0.45;
+      spawnParticles(state.playerX, state.playerY + 1.2, 0, 0xff2a3c, 22);
+
+      const finalScore = Math.floor(state.score);
+      const isNewBest = finalScore > saveData.highScore;
+      if (isNewBest) saveData.highScore = finalScore;
+      saveData.coins += state.runCoins;
+      writeSave(saveData);
+
+      document.getElementById('hud').classList.add('hidden');
+      document.getElementById('touch-controls').classList.add('hidden');
+      document.getElementById('pursuer-warning').classList.add('hidden');
+
+      document.getElementById('go-reason').textContent = reason;
+      document.getElementById('go-score').textContent = finalScore.toLocaleString();
+      document.getElementById('go-coins').textContent = `+${state.runCoins}`;
+      document.getElementById('go-dist').textContent = `${Math.floor(state.distance)}m`;
+      document.getElementById('go-new-best').classList.toggle('hidden', !isNewBest);
+
+      showScreen('screen-gameover');
+      updateMenuStats();
+    }
+
+    function showScreen(id) {
+      const ids = ['screen-menu', 'screen-pause', 'screen-gameover', 'screen-armory', 'screen-howto'];
+      for (const s of ids) {
+        document.getElementById(s).classList.toggle('hidden', s !== id);
+      }
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => el.classList.add('hidden'), 1800);
+    }
+
+    // Player Actions
+    function moveLane(dir) {
+      if (state.mode !== 'playing') return;
+      const next = Math.max(0, Math.min(2, state.lane + dir));
+      if (next !== state.lane) {
+        state.lane = next;
+        state.targetX = LANES[state.lane];
+        SoundFX.lane();
+      }
+    }
+
+    function jump() {
+      if (state.mode !== 'playing') return;
+      if (!state.isJumping || state.playerY <= state.groundY + 0.08) {
+        state.velY = JUMP_VELOCITY;
+        state.isJumping = true;
+        state.isSliding = false;
+        state.queuedSlide = false;
+        state.slideTimer = 0;
+        SoundFX.jump();
+        spawnParticles(state.playerX, state.playerY + 0.2, 0, 0xef4444, 6);
+      }
+    }
+
+    function slide() {
+      if (state.mode !== 'playing') return;
+      if (state.playerY > state.groundY + 0.15) {
+        // Fast-fall and queue full ground slide on landing
+        state.velY = -44;
+        state.queuedSlide = true;
+      } else {
+        state.queuedSlide = false;
+      }
+      state.isSliding = true;
+      state.slideTimer = 0.82;
+      SoundFX.slide();
+      spawnParticles(state.playerX, state.playerY + 0.2, 0.2, 0xef4444, 5);
+    }
+
+
+
+    // =========================================================================
+    // MAIN UPDATE LOOP
+    // =========================================================================
+    function updateGame(dt) {
+      // Track scrolling even in menu for dynamic background
+      const activeSpeed = state.mode === 'playing'
+        ? state.speed
+        : (state.mode === 'menu' ? 12 : 0);
+
+      if (activeSpeed > 0) {
+        for (const seg of trackSegments) {
+          seg.position.z += activeSpeed * dt;
+          if (seg.position.z > 24) {
+            seg.position.z -= trackSegments.length * 24;
+          }
+        }
+        for (const sign of ultronWallSigns) {
+          sign.position.z += activeSpeed * dt;
+          if (sign.position.z > 20) {
+            sign.position.z -= ultronWallSigns.length * 50;
+          }
+        }
+      }
+
+      if (state.mode === 'menu') {
+        // Idle hero animation on menu
+        state.runCycle += dt * 7;
+        animateUltron(dt);
+        camera.position.set(Math.sin(performance.now() * 0.0005) * 0.8, 3.8, 6.2);
+        camera.lookAt(0, 1.6, -8);
+        return;
+      }
+
+      if (state.mode !== 'playing') return;
+
+      // Speed & Score progression
+      state.speed = Math.min(MAX_SPEED, BASE_SPEED + state.distance * 0.012);
+      state.distance += activeSpeed * dt;
+      state.score += activeSpeed * dt * 1.8;
+
+      // Timers
+      if (state.invulnTimer > 0) state.invulnTimer = Math.max(0, state.invulnTimer - dt);
+      if (state.stumbleTimer > 0) {
+        state.stumbleTimer = Math.max(0, state.stumbleTimer - dt);
+        if (state.stumbleTimer === 0) {
+          document.getElementById('pursuer-warning').classList.add('hidden');
+        }
+      }
+
+
+      // Horizontal lane interpolation
+      const dx = state.targetX - state.playerX;
+      state.playerX += dx * Math.min(1, dt * 15);
+      ultronGroup.position.x = state.playerX;
+      ultronGroup.rotation.z = -dx * 0.09;
+
+      // Vertical physics & train-roof ground detection
+      let targetGroundY = 0;
+      for (const obs of obstacles) {
+        if (obs.type === 'train' || obs.type === 'ramp_train') {
+          const halfLen = obs.length / 2;
+          const sameLane = Math.abs(state.playerX - LANES[obs.lane]) < 1.25;
+          if (sameLane) {
+            // Check roof
+            if (obs.z - halfLen <= 0.5 && obs.z + halfLen >= -0.5 && state.playerY >= 2.75) {
+              targetGroundY = Math.max(targetGroundY, 3.1);
+            }
+            // Check ramp
+            if (obs.hasRamp) {
+              const rampStart = obs.z + halfLen + obs.rampLength;
+              const rampEnd = obs.z + halfLen;
+              if (0 <= rampStart && 0 >= rampEnd) {
+                const t = (rampStart - 0) / obs.rampLength;
+                targetGroundY = Math.max(targetGroundY, t * 3.1);
+              }
+            }
+          }
+        }
+      }
+      state.groundY = targetGroundY;
+
+      state.velY += GRAVITY * dt;
+      state.playerY += state.velY * dt;
+      if (state.playerY <= state.groundY) {
+        state.playerY = state.groundY;
+        state.velY = 0;
+        state.isJumping = false;
+        if (state.queuedSlide) {
+          state.isSliding = true;
+          state.slideTimer = 0.82;
+          state.queuedSlide = false;
+        }
+      }
+      ultronGroup.position.y = state.playerY;
+
+      // Slide timer & scale
+      if (state.isSliding) {
+        state.slideTimer -= dt;
+        if (state.slideTimer <= 0) state.isSliding = false;
+      }
+
+
+
+      // Animate Ultron
+      state.runCycle += dt * (activeSpeed * 0.52);
+      animateUltron(dt);
+
+      // Pursuer positioning
+      const targetPursuerZ = state.stumbleTimer > 0 ? 3.2 : 8.5;
+      state.pursuerDist += (targetPursuerZ - state.pursuerDist) * Math.min(1, dt * 3);
+      pursuerGroup.position.set(
+        state.playerX * 0.7,
+        Math.sin(performance.now() * 0.008) * 0.25,
+        state.pursuerDist
+      );
+
+      // Move & check Obstacles
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obs = obstacles[i];
+        obs.z += (activeSpeed + obs.speed) * dt;
+        obs.mesh.position.z = obs.z;
+
+        // Collision check around z = 0
+        if (!obs.hit && state.invulnTimer <= 0) {
+          const halfLen = obs.length / 2;
+          const zNear = obs.z - halfLen;
+          const zFar = obs.z + halfLen;
+          const inZ = zNear <= 0.48 && zFar >= -0.48;
+          const inLane = Math.abs(state.playerX - LANES[obs.lane]) < 1.1;
+
+          if (inZ && inLane) {
+            let collided = false;
+            let isFatal = true;
+            let reason = 'Collided with Cyber-Barrier';
+
+            if (obs.type === 'train' || obs.type === 'ramp_train') {
+              if (state.playerY < 2.75) {
+                collided = true;
+                reason = 'Collided with Maglev Transit';
+              }
+            } else if (obs.type === 'low_laser') {
+              if (state.playerY < 1.05) {
+                collided = true;
+                isFatal = false;
+                reason = 'Tripped on Laser Barrier';
+              }
+            } else if (obs.type === 'high_laser') {
+              if (!state.isSliding && state.playerY + 2.1 > 1.55) {
+                collided = true;
+                isFatal = false;
+                reason = 'Struck Overhead Security Gate';
+              }
+            } else if (obs.type === 'pillar') {
+              if (state.playerY < 2.8) {
+                collided = true;
+                reason = 'Crashed into Security Pillar';
+              }
+            }
+
+            if (collided) {
+              obs.hit = true;
+              if (!isFatal && state.stumbleTimer <= 0) {
+                // Minor stumble
+                state.stumbleTimer = 5.0;
+                state.invulnTimer = 1.0;
+                state.screenShake = 0.2;
+                SoundFX.stumble();
+                document.getElementById('pursuer-warning').classList.remove('hidden');
+              } else {
+                triggerGameOver(isFatal ? reason : 'Captured by the Interceptor!');
+                return;
+              }
+            }
+          }
+        }
+
+        if (obs.z > 22) {
+          scene.remove(obs.mesh);
+          obstacles.splice(i, 1);
+        }
+      }
+
+      // Move & check Coins
+      for (let i = collectibles.length - 1; i >= 0; i--) {
+        const c = collectibles[i];
+        c.mesh.position.z += activeSpeed * dt;
+        c.mesh.rotation.y += dt * 3.5;
+
+        // Pickup distance check
+        const dxC = c.mesh.position.x - state.playerX;
+        const dyC = c.mesh.position.y - (state.playerY + (state.isSliding ? 0.6 : 1.15));
+        const dzC = c.mesh.position.z;
+        if (dxC * dxC + dyC * dyC + dzC * dzC < 1.9) {
+          state.runCoins += 1;
+          state.score += 15;
+          SoundFX.coin();
+          spawnParticles(c.mesh.position.x, c.mesh.position.y, 0, 0xfacc15, 4);
+          scene.remove(c.mesh);
+          collectibles.splice(i, 1);
+          continue;
+        }
+
+        if (c.mesh.position.z > 12) {
+          scene.remove(c.mesh);
+          collectibles.splice(i, 1);
+        }
+      }
+
+      // Spawn new waves ahead
+      state.spawnTimer -= dt;
+      if (state.spawnTimer <= 0) {
+        spawnPattern(-120);
+        state.spawnTimer = Math.max(0.75, 34 / activeSpeed);
+      }
+
+      // Particles update
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= dt;
+        p.mesh.position.x += p.vx * dt;
+        p.mesh.position.y += p.vy * dt;
+        p.mesh.position.z += p.vz * dt;
+        p.vy -= 18 * dt;
+        if (p.life <= 0) {
+          scene.remove(p.mesh);
+          particles.splice(i, 1);
+        }
+      }
+
+      // Camera follow + screen shake
+      if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - dt);
+      const shakeX = (Math.random() - 0.5) * state.screenShake;
+      const shakeY = (Math.random() - 0.5) * state.screenShake;
+
+      const camTargetX = state.playerX * 0.55;
+      const camTargetY = 4.6 + state.playerY * 0.72;
+      camera.position.x += (camTargetX - camera.position.x) * Math.min(1, dt * 8) + shakeX;
+      camera.position.y += (camTargetY - camera.position.y) * Math.min(1, dt * 8) + shakeY;
+      camera.position.z = 6.8;
+      camera.lookAt(state.playerX * 0.3, state.playerY + 1.6, -10);
+
+      updateHUD();
+    }
+
+    function animateUltron(dt) {
+      if (!ultronParts.legLPivot) return;
+      if (state.isSliding) {
+        ultronGroup.scale.set(1, 0.48, 1);
+        ultronParts.torso.rotation.x = -0.5;
+        ultronParts.legLPivot.rotation.x = -1.1;
+        ultronParts.legRPivot.rotation.x = -0.75;
+        ultronParts.armLPivot.rotation.x = 0.65;
+        ultronParts.armRPivot.rotation.x = 0.65;
+        return;
+      }
+      ultronGroup.scale.set(1, 1, 1);
+      ultronParts.torso.rotation.x = 0.14;
+
+      if (state.isJumping) {
+        ultronParts.legLPivot.rotation.x = 0.55;
+        ultronParts.legRPivot.rotation.x = -0.45;
+        ultronParts.armLPivot.rotation.x = -0.7;
+        ultronParts.armRPivot.rotation.x = 0.4;
+      } else {
+        const s = Math.sin(state.runCycle);
+        ultronParts.legLPivot.rotation.x = s * 0.95;
+        ultronParts.legRPivot.rotation.x = -s * 0.95;
+        ultronParts.armLPivot.rotation.x = -s * 0.85;
+        ultronParts.armRPivot.rotation.x = s * 0.85;
+      }
+    }
+
+    // =========================================================================
+    // HUD & ARMORY UI
+    // =========================================================================
+    function updateHUD() {
+      document.getElementById('hud-score').textContent = String(Math.floor(state.score)).padStart(6, '0');
+      document.getElementById('hud-best').textContent = Math.max(saveData.highScore, Math.floor(state.score)).toLocaleString();
+      document.getElementById('hud-coins').textContent = state.runCoins;
+      document.getElementById('hud-total-coins').textContent = `/ ${(saveData.coins + state.runCoins).toLocaleString()}`;
+    }
+
+    function updateMenuStats() {
+      document.getElementById('menu-best').textContent = saveData.highScore.toLocaleString();
+      document.getElementById('menu-coins').textContent = saveData.coins.toLocaleString();
+      document.getElementById('armory-coins').textContent = saveData.coins.toLocaleString();
+    }
+
+    function renderArmory() {
+      updateMenuStats();
+      const skinsEl = document.getElementById('armory-skins');
+      skinsEl.innerHTML = SKINS.map(sk => {
+        const owned = saveData.unlockedSkins.includes(sk.id);
+        const equipped = saveData.activeSkin === sk.id;
+        const canBuy = !owned && saveData.coins >= sk.price;
+        return `
+          <button data-skin="${sk.id}"
+            class="p-3 rounded-2xl border text-left transition cursor-pointer ${
+              equipped ? 'bg-red-500/20 border-red-400' : 'bg-slate-900/75 border-white/10 hover:bg-white/10'
+            }">
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-bold text-xs sm:text-sm text-white">${sk.name}</span>
+              <span class="w-3.5 h-3.5 rounded-full" style="background:#${sk.glow.toString(16).padStart(6, '0')}"></span>
+            </div>
+            <div class="font-display text-[11px] font-bold ${equipped ? 'text-red-300' : owned ? 'text-emerald-400' : canBuy ? 'text-amber-300' : 'text-slate-500'}">
+              ${equipped ? 'EQUIPPED' : owned ? 'TAP TO EQUIP' : `${sk.price} COINS`}
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function syncMuteButtons() {
+      const m = SoundFX.isMuted();
+      document.getElementById('mute-icon-hud').textContent = m ? '🔇' : '🔊';
+      document.getElementById('mute-label-menu').textContent = m ? '🔇 Muted' : '🔊 Sound';
+    }
+
+    // =========================================================================
+    // INPUT & EVENT LISTENERS
+    // =========================================================================
+    function setupEvents() {
+      // Keyboard
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moveLane(-1);
+        else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moveLane(1);
+        else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') jump();
+        else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') slide();
+        else if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+          if (state.mode === 'playing') pauseGame();
+          else if (state.mode === 'paused') resumeGame();
+        }
+      });
+
+      // Touch swipe on canvas
+      let touchStartX = 0, touchStartY = 0;
+      const canvas = document.getElementById('game-canvas');
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 0) return;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }, { passive: true });
+
+      canvas.addEventListener('touchend', (e) => {
+        if (state.mode !== 'playing' || e.changedTouches.length === 0) return;
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        if (Math.abs(dx) < 15 && Math.abs(dy) < 15) return;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          moveLane(dx > 0 ? 1 : -1);
+        } else {
+          if (dy < 0) jump();
+          else slide();
+        }
+      }, { passive: true });
+
+      // On-screen mobile buttons
+      document.getElementById('btn-touch-left').addEventListener('click', () => moveLane(-1));
+      document.getElementById('btn-touch-right').addEventListener('click', () => moveLane(1));
+      document.getElementById('btn-touch-jump').addEventListener('click', jump);
+      document.getElementById('btn-touch-slide').addEventListener('click', slide);
+
+      // UI Buttons
+      document.getElementById('btn-play').addEventListener('click', startRun);
+      document.getElementById('btn-retry').addEventListener('click', startRun);
+      document.getElementById('btn-pause').addEventListener('click', pauseGame);
+      document.getElementById('btn-resume').addEventListener('click', resumeGame);
+      document.getElementById('btn-restart-pause').addEventListener('click', startRun);
+
+      const backToMenu = () => {
+        state.mode = 'menu';
+        clearWorldObjects();
+        buildUltron();
+        document.getElementById('hud').classList.add('hidden');
+        document.getElementById('touch-controls').classList.add('hidden');
+        updateMenuStats();
+        showScreen('screen-menu');
+      };
+
+      document.getElementById('btn-menu-pause').addEventListener('click', backToMenu);
+      document.getElementById('btn-go-menu').addEventListener('click', backToMenu);
+
+      // Mute toggles
+      const onMute = () => {
+        SoundFX.toggleMute();
+        syncMuteButtons();
+      };
+      document.getElementById('btn-mute-hud').addEventListener('click', onMute);
+      document.getElementById('btn-mute-menu').addEventListener('click', onMute);
+
+      // Armory
+      document.getElementById('btn-open-armory').addEventListener('click', () => {
+        state.returnFromArmory = 'screen-menu';
+        renderArmory();
+        showScreen('screen-armory');
+      });
+      document.getElementById('btn-go-armory').addEventListener('click', () => {
+        state.returnFromArmory = 'screen-gameover';
+        renderArmory();
+        showScreen('screen-armory');
+      });
+      document.getElementById('btn-close-armory').addEventListener('click', () => {
+        showScreen(state.returnFromArmory);
+      });
+
+      document.getElementById('armory-skins').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-skin]');
+        if (!btn) return;
+        const skinId = btn.dataset.skin;
+        const sk = SKINS.find(s => s.id === skinId);
+        if (!sk) return;
+        if (saveData.unlockedSkins.includes(skinId)) {
+          saveData.activeSkin = skinId;
+          writeSave(saveData);
+          buildUltron();
+          SoundFX.lane();
+          renderArmory();
+        } else if (saveData.coins >= sk.price) {
+          saveData.coins -= sk.price;
+          saveData.unlockedSkins.push(skinId);
+          saveData.activeSkin = skinId;
+          writeSave(saveData);
+          buildUltron();
+          SoundFX.powerup();
+          renderArmory();
+        }
+      });
+
+      // How To Play
+      document.getElementById('btn-open-howto').addEventListener('click', () => showScreen('screen-howto'));
+      document.getElementById('btn-close-howto').addEventListener('click', () => showScreen('screen-menu'));
+    }
+
+    function gameLoop(now) {
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+      updateGame(dt);
+      renderer.render(scene, camera);
+      animFrameId = requestAnimationFrame(gameLoop);
+    }
+
+    window.onload = () => {
+      initThree();
+      setupEvents();
+      updateMenuStats();
+      syncMuteButtons();
+      if (animFrameId) cancelAnimationFrame(animFrameId);
+      lastTime = performance.now();
+      animFrameId = requestAnimationFrame(gameLoop);
+    };
+  </script>
+</body>
+</html>
